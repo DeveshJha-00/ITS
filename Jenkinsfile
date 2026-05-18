@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JDK21'
-        nodejs 'Node20'
+        jdk 'jdk21'
+        nodejs 'node20'
     }
 
     environment {
