@@ -12,8 +12,16 @@ if __package__ is None or __package__ == "":
     sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.config import (
-    SlotCategory, SlotStatus, DEFAULT_RATES, SLOTS_LAYOUT, TOTAL_SLOTS
+    SlotCategory, SlotStatus, DEFAULT_RATES, SLOTS_LAYOUT, TOTAL_SLOTS, GRID_COLS
 )
+
+# Row start index per slot-ID prefix (determines where each category sits in the grid)
+_CATEGORY_ROW_START = {
+    "2W": 0,   # rows 0-2  (30 slots)
+    "4W": 3,   # rows 3-7  (50 slots)
+    "EV": 8,   # rows 8-9  (15 slots)
+    "D":  10,  # row  10   (5 slots — prefix "D" for Disabled)
+}
 from app.db.path import DB_PATH
 
 DEFAULT_BILLING_RULES = {
@@ -69,14 +77,60 @@ def seed_slots():
             # Pre-populate some slots as occupied for demo
             status = SlotStatus.OCCUPIED if slot_id in occupied_slots else SlotStatus.AVAILABLE
             
+            # Calculate grid coordinates: 0-indexed slot number within its category
+            idx = i  # i is 0-based loop counter
+            row_start = _CATEGORY_ROW_START.get(category_prefix, 0)
+            pos_x = idx % GRID_COLS
+            pos_y = row_start + (idx // GRID_COLS)
+
             cursor.execute("""
-                INSERT INTO slots (slot_id, category, status, rate_per_hour)
-                VALUES (?, ?, ?, ?)
-            """, (slot_id, category, status, rate))
+                INSERT INTO slots (slot_id, category, status, rate_per_hour, pos_x, pos_y)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (slot_id, category, status, rate, pos_x, pos_y))
     
     conn.commit()
     conn.close()
     print(f"Seeded {TOTAL_SLOTS} slots (with {len(occupied_slots)} pre-occupied for demo)")
+
+def assign_default_coordinates():
+    """Backfill grid coordinates for existing slots that have NULL pos_x / pos_y.
+
+    Safe to call repeatedly — only updates rows where both values are NULL.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT slot_id FROM slots WHERE pos_x IS NULL OR pos_y IS NULL ORDER BY slot_id"
+    )
+    rows = cursor.fetchall()
+
+    updated = 0
+    for (slot_id,) in rows:
+        parts = slot_id.split("-")
+        if len(parts) != 2:
+            continue
+        prefix = parts[0]
+        try:
+            idx = int(parts[1]) - 1  # convert 1-based slot number to 0-based index
+        except ValueError:
+            continue
+
+        row_start = _CATEGORY_ROW_START.get(prefix, 0)
+        pos_x = idx % GRID_COLS
+        pos_y = row_start + (idx // GRID_COLS)
+
+        cursor.execute(
+            "UPDATE slots SET pos_x = ?, pos_y = ? WHERE slot_id = ?",
+            (pos_x, pos_y, slot_id),
+        )
+        updated += 1
+
+    conn.commit()
+    conn.close()
+    if updated:
+        print(f"Assigned default coordinates to {updated} slot(s)")
+
 
 def seed_occupancy_history(days=30, random_seed=None):
     """Generate simulated occupancy history for a configurable number of days.

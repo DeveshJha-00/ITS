@@ -31,20 +31,25 @@ export const cancelBooking = (bookingId) => {
   return api.delete(`/bookings/${bookingId}`);
 };
 
-export const checkIn = (qrPayload) => {
-  return api.post('/checkin', { qr_payload: qrPayload });
+export const checkIn = (qrPayload, entryPoint = 'A') => {
+  return api.post('/checkin', { qr_payload: qrPayload, entry_point: entryPoint });
 };
 
 export const checkOut = (qrPayload) => {
   return api.post('/checkout', { qr_payload: qrPayload });
 };
 
-export const completeCheckout = (qrPayload, checkoutTime) => {
+export const completeCheckout = (qrPayload, checkoutTime, exitPoint = 'A') => {
   return api.post('/checkout/complete', {
     qr_payload: qrPayload,
     checkout_time: checkoutTime,
+    exit_point: exitPoint,
   });
 };
+
+// Layout management (admin)
+export const getSlotLayout = () => api.get('/admin/slots/layout');
+export const updateSlotLayout = (slots) => api.patch('/admin/slots/layout', { slots });
 
 export const createWalkinBooking = (data) => {
   return api.post('/bookings/walkin', data);

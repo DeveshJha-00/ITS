@@ -10,6 +10,7 @@ import {
   setAdminToken,
   getRates,
   updateRate,
+  getSlotLayout,
 } from '../api/client';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import SlotGrid from '../components/SlotGrid';
@@ -377,6 +378,7 @@ function AdminPage() {
           <TabButton id="slots" label="Slot Management" />
           <TabButton id="logs" label="Logs" />
           <TabButton id="rates" label="Billing" />
+          <TabButton id="layout" label="Layout" />
         </div>
       </div>
 
@@ -760,6 +762,10 @@ function AdminPage() {
           </div>
         )}
 
+        {selectedTab === 'layout' && (
+          <LayoutManager />
+        )}
+
         {selectedTab === 'rates' && (
           <div className="space-y-6">
             <h2 className="text-3xl font-display font-bold text-[--text-primary]">Billing Configuration</h2>
@@ -809,6 +815,155 @@ function AdminPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ── LayoutManager ─────────────────────────────────────────────────────── */
+const LM_CELL = 36;   // px per grid cell
+const LM_PAD  = 16;   // px padding
+const LM_COLS = 10;
+const LM_ROWS = 11;
+
+// Gates are corner cells *inside* the grid — same model as the driver mini-map:
+//   Entry A → (x=0,       y=0)           top-left
+//   Entry B → (x=LM_COLS-1, y=0)         top-right
+//   Exit  A → (x=0,       y=LM_ROWS-1)   bottom-left
+//   Exit  B → (x=LM_COLS-1, y=LM_ROWS-1) bottom-right
+const ENTRY_GATE_COLOR = { A: 'var(--accent-green)', B: 'var(--accent-blue)' };
+const EXIT_GATE_COLOR  = { A: 'var(--accent-amber)', B: '#a78bfa' };
+
+function LayoutManager() {
+  const [layoutData, setLayoutData] = useState(null);
+  const [loadErr, setLoadErr]       = useState('');
+
+  useEffect(() => {
+    getSlotLayout()
+      .then(res => setLayoutData(res.data))
+      .catch(() => setLoadErr('Failed to load layout data.'));
+  }, []);
+
+  if (loadErr) return <p className="text-red-400 p-4">{loadErr}</p>;
+  if (!layoutData) return <p className="text-[--text-muted] p-4">Loading layout…</p>;
+
+  const { slots, entry_points, exit_points } = layoutData;
+
+  // Build a quick lookup: "col,row" → slot
+  const slotMap = {};
+  slots.forEach(s => {
+    if (s.pos_x != null && s.pos_y != null) slotMap[`${s.pos_x},${s.pos_y}`] = s;
+  });
+
+  // Build gate lookup: "col,row" → { label, color }
+  const gateMap = {};
+  Object.entries(entry_points).forEach(([key, g]) => {
+    gateMap[`${g.x},${g.y}`] = { label: g.name, color: ENTRY_GATE_COLOR[key] || 'var(--accent-green)' };
+  });
+  Object.entries(exit_points).forEach(([key, g]) => {
+    gateMap[`${g.x},${g.y}`] = { label: g.name, color: EXIT_GATE_COLOR[key] || 'var(--accent-amber)' };
+  });
+
+  const statusColor = (status) => {
+    switch (status) {
+      case 'available':   return 'var(--accent-green)';
+      case 'reserved':    return 'var(--accent-blue)';
+      case 'occupied':    return 'var(--accent-amber)';
+      case 'unavailable': return 'var(--text-muted)';
+      default:            return 'var(--border)';
+    }
+  };
+
+  // SVG dimensions — no extra rows; gates overlay the corner grid cells
+  const totalW = LM_COLS * LM_CELL + LM_PAD * 2;
+  const totalH = LM_ROWS * LM_CELL + LM_PAD * 2;
+
+  const colX = (c) => LM_PAD + c * LM_CELL;
+  const rowY = (r) => LM_PAD + r * LM_CELL;
+  const midX = (c) => colX(c) + LM_CELL / 2;
+  const midY = (r) => rowY(r) + LM_CELL / 2;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-display font-bold text-[--text-primary] mb-1">Parking Layout</h2>
+        <p className="text-sm text-[--text-muted]">Gate corners are overlaid on their grid cells. Entry gates (top), Exit gates (bottom).</p>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 text-xs font-medium">
+        {[
+          { label: 'Available',   color: 'var(--accent-green)' },
+          { label: 'Reserved',    color: 'var(--accent-blue)' },
+          { label: 'Occupied',    color: 'var(--accent-amber)' },
+          { label: 'Unavailable', color: 'var(--text-muted)' },
+        ].map(({ label, color }) => (
+          <span key={label} className="flex items-center gap-2">
+            <span style={{ width: 12, height: 12, borderRadius: 3, background: color, display: 'inline-block' }} />
+            {label}
+          </span>
+        ))}
+        <span className="flex items-center gap-2 ml-4">
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--accent-green)', border: '2px solid var(--text-primary)', display: 'inline-block' }} />
+          Entry Gate
+        </span>
+        <span className="flex items-center gap-2">
+          <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--accent-amber)', border: '2px solid var(--text-primary)', display: 'inline-block' }} />
+          Exit Gate
+        </span>
+      </div>
+
+      <div className="overflow-x-auto">
+        <svg width={totalW} height={totalH}
+          style={{ background: 'var(--bg-elevated)', borderRadius: 16, display: 'block' }}>
+
+          {/* ── Slot grid ── */}
+          {Array.from({ length: LM_ROWS }).map((_, r) =>
+            Array.from({ length: LM_COLS }).map((_, c) => {
+              const slot    = slotMap[`${c},${r}`];
+              const gate    = gateMap[`${c},${r}`];
+              const fill    = slot ? statusColor(slot.status) : 'var(--bg-surface)';
+              const opacity = slot ? 0.75 : 0.35;
+              const gx = colX(c);
+              const gy = rowY(r);
+              return (
+                <g key={`cell-${r}-${c}`}>
+                  {/* Base slot cell */}
+                  <rect x={gx + 1} y={gy + 1} width={LM_CELL - 2} height={LM_CELL - 2}
+                    rx={4} fill={fill} opacity={opacity} />
+                  {/* Slot number (hidden when a gate overlays this cell) */}
+                  {slot && !gate && (
+                    <text x={midX(c)} y={midY(r)}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontSize={7} fill="var(--bg-base)" fontFamily="monospace" fontWeight="600">
+                      {slot.slot_id.split('-')[1] || ''}
+                    </text>
+                  )}
+                  {/* Gate corner overlay */}
+                  {gate && (
+                    <>
+                      <rect x={gx + 2} y={gy + 2} width={LM_CELL - 4} height={LM_CELL - 4}
+                        rx={6} fill={gate.color} opacity={0.9}
+                        stroke={gate.color} strokeWidth={1.5} />
+                      <text x={midX(c)} y={midY(r)}
+                        textAnchor="middle" dominantBaseline="middle"
+                        fontSize={8} fontWeight="bold" fill="#000" fontFamily="monospace">
+                        {gate.label}
+                      </text>
+                    </>
+                  )}
+                </g>
+              );
+            })
+          )}
+        </svg>
+      </div>
+
+      {/* Slot list summary */}
+      <p className="text-xs text-[--text-muted]">
+        {slots.length} total slots · {slots.filter(s => s.status === 'available').length} available ·{' '}
+        {slots.filter(s => s.status === 'occupied').length} occupied ·{' '}
+        {slots.filter(s => s.status === 'reserved').length} reserved
+      </p>
     </div>
   );
 }

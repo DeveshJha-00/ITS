@@ -11,7 +11,7 @@ from flask import Flask
 from flask_cors import CORS
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.db.init import init_db
-from app.db.seed import seed_db, seed_rate_settings
+from app.db.seed import seed_db, seed_rate_settings, assign_default_coordinates
 from app.routes.public import public_bp
 from app.routes.admin import admin_bp
 from app.routes.debug import debug_bp
@@ -33,6 +33,9 @@ def create_app():
     if SlotService.get_total_slots() == 0:
         print("Seeding initial data...")
         seed_db()
+    else:
+        # Backfill spatial coordinates for any existing slots that lack them
+        assign_default_coordinates()
     
     # Register blueprints
     app.register_blueprint(public_bp)

@@ -7,7 +7,7 @@ from app.services.slot_service import SlotService
 from app.services.booking_service import BookingService
 from app.services.analytics_service import AnalyticsService
 from app.services.rate_service import RateService
-from app.config import SlotStatus
+from app.config import SlotStatus, ENTRY_POINTS, EXIT_POINTS, GRID_COLS, GRID_ROWS
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 
@@ -119,6 +119,48 @@ def delete_booking(booking_id):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@admin_bp.route("/slots/layout", methods=["GET"])
+@check_admin_auth
+def get_slots_layout():
+    """Return all slots with spatial coordinates plus gate-point metadata."""
+    try:
+        slots = SlotService.get_all_slots()
+        return jsonify({
+            "slots": [s.to_dict() for s in slots],
+            "entry_points": ENTRY_POINTS,
+            "exit_points": EXIT_POINTS,
+            "grid": {"cols": GRID_COLS, "rows": GRID_ROWS},
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@admin_bp.route("/slots/layout", methods=["PATCH"])
+@check_admin_auth
+def update_slots_layout():
+    """Bulk-update spatial coordinates for multiple slots.
+
+    Expected body: {"slots": [{"slot_id": "4W-001", "pos_x": 0, "pos_y": 3}, ...]}
+    """
+    try:
+        data = request.json or {}
+        slot_updates = data.get("slots", [])
+
+        if not isinstance(slot_updates, list) or not slot_updates:
+            return jsonify({"error": "slots must be a non-empty list"}), 400
+
+        for item in slot_updates:
+            if not all(k in item for k in ("slot_id", "pos_x", "pos_y")):
+                return jsonify({"error": "Each entry needs slot_id, pos_x, pos_y"}), 400
+            if not isinstance(item["pos_x"], int) or not isinstance(item["pos_y"], int):
+                return jsonify({"error": "pos_x and pos_y must be integers"}), 400
+
+        updated = SlotService.bulk_update_layout(slot_updates)
+        return jsonify({"updated": updated, "entry_points": ENTRY_POINTS, "exit_points": EXIT_POINTS}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @admin_bp.route("/slots/<slot_id>", methods=["PATCH"])
 @check_admin_auth

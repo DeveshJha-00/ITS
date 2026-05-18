@@ -15,6 +15,10 @@ function DriverPage() {
   const [gateQrPayload, setGateQrPayload] = useState('');
   const [gateMessage, setGateMessage] = useState(null);
   const [checkoutBill, setCheckoutBill] = useState(null);
+  const [entryPoint, setEntryPoint] = useState('A');          // 'A' | 'B'
+  const [exitPoint, setExitPoint] = useState('A');            // 'A' | 'B'
+  const [directions, setDirections] = useState(null);         // check-in nav directions
+  const [exitDirections, setExitDirections] = useState(null); // post-checkout nav directions
   const [error, setError] = useState('');
 
   // Fetch slots
@@ -73,7 +77,9 @@ function DriverPage() {
     }
 
     try {
-      const response = await checkIn(gateQrPayload.trim());
+      const response = await checkIn(gateQrPayload.trim(), entryPoint);
+      setDirections(response.data.directions || null);
+      setExitDirections(null); // clear any previous exit nav
       setGateMessage({
         type: 'success',
         title: 'Check-in completed',
@@ -81,6 +87,7 @@ function DriverPage() {
       });
       setError('');
     } catch (err) {
+      setDirections(null);
       setError(err.response?.data?.error || 'Check-in failed');
     }
   };
@@ -114,11 +121,13 @@ function DriverPage() {
     }
 
     try {
-      const response = await completeCheckout(gateQrPayload.trim(), checkoutBill.checkout_time);
+      const response = await completeCheckout(gateQrPayload.trim(), checkoutBill.checkout_time, exitPoint);
+      setExitDirections(response.data.exit_directions || null);
+      setDirections(null); // replace check-in nav with exit nav
       setGateMessage({
         type: 'success',
         title: 'Payment completed',
-        message: `Slot ${response.data.bill.slot_id} is now free. Thank you!`,
+        message: `Slot ${response.data.bill.slot_id} is now free. Safe travels!`,
       });
       setBookingResult(null);
       setCheckoutBill(null);
@@ -146,17 +155,19 @@ function DriverPage() {
     if (!payload?.trim()) return setError('Missing booking payload');
 
     try {
-      const response = await checkIn(payload.trim());
+      const response = await checkIn(payload.trim(), entryPoint);
+      setDirections(response.data.directions || null);
+      setExitDirections(null);
       setGateMessage({
         type: 'success',
         title: 'Check-in completed',
         message: `Slot ${response.data.slot_id} is now occupied. Welcome!`,
       });
       setBookingResult(null);
-      // also set gate input for reference
       setGateQrPayload(payload.trim());
       setError('');
     } catch (err) {
+      setDirections(null);
       setError(err.response?.data?.error || 'Check-in failed');
     }
   };
@@ -235,17 +246,37 @@ function DriverPage() {
             />
           </div>
 
-          {/* Right Column: Booking/Check-in */}
+          {/* Right Column: Booking/Check-in + Navigation */}
           <div className="lg:col-span-1 overflow-y-auto max-h-screen">
             {bookingResult ? (
-              <QRCodeScreen
-                booking={bookingResult}
-                onDownload={handleDownload}
-                onUseQr={handleUseQr}
-                onCopyPayload={handleCopyPayload}
-              />
+              <>
+                <QRCodeScreen
+                  booking={bookingResult}
+                  entryPoint={entryPoint}
+                  setEntryPoint={setEntryPoint}
+                  onDownload={handleDownload}
+                  onUseQr={handleUseQr}
+                  onCopyPayload={handleCopyPayload}
+                />
+                {directions && directions.pos_x !== null && (
+                  <NavigationPanel
+                    title={`Navigate to ${directions.slot_id}`}
+                    subtitle={`From ${directions.entry}`}
+                    steps={directions.steps}
+                    accent="blue"
+                  />
+                )}
+                {exitDirections && exitDirections.pos_x !== null && (
+                  <NavigationPanel
+                    title={`Head to ${exitDirections.exit}`}
+                    subtitle={`From slot ${exitDirections.slot_id}`}
+                    steps={exitDirections.steps}
+                    accent="amber"
+                  />
+                )}
+              </>
             ) : (
-              <div className="sticky top-24">
+              <div className="sticky top-24 space-y-4">
                 <GateActions
                   gateQrPayload={gateQrPayload}
                   setGateQrPayload={setGateQrPayload}
@@ -253,7 +284,27 @@ function DriverPage() {
                   handlePreviewBill={handlePreviewBill}
                   checkoutBill={checkoutBill}
                   handleCompletePayment={handleCompletePayment}
+                  entryPoint={entryPoint}
+                  setEntryPoint={setEntryPoint}
+                  exitPoint={exitPoint}
+                  setExitPoint={setExitPoint}
                 />
+                {directions && directions.pos_x !== null && (
+                  <NavigationPanel
+                    title={`Navigate to ${directions.slot_id}`}
+                    subtitle={`From ${directions.entry}`}
+                    steps={directions.steps}
+                    accent="blue"
+                  />
+                )}
+                {exitDirections && exitDirections.pos_x !== null && (
+                  <NavigationPanel
+                    title={`Head to ${exitDirections.exit}`}
+                    subtitle={`From slot ${exitDirections.slot_id}`}
+                    steps={exitDirections.steps}
+                    accent="amber"
+                  />
+                )}
               </div>
             )}
           </div>
@@ -277,14 +328,31 @@ function DriverPage() {
   );
 }
 
-const QRCodeScreen = ({ booking, onDownload, onUseQr, onCopyPayload }) => (
+const QRCodeScreen = ({ booking, entryPoint, setEntryPoint, onDownload, onUseQr, onCopyPayload }) => (
   <div className="bg-[--bg-surface] border border-[--border] rounded-xl p-6 text-center">
     <h2 className="text-2xl font-display font-bold mb-2">Booking Confirmed</h2>
-    <p className="text-[--text-muted] text-sm mb-6">Scan this QR at the entry gate or use the actions below.</p>
-    
+    <p className="text-[--text-muted] text-sm mb-4">Scan this QR at the entry gate or use the actions below.</p>
+
+    {/* Entry gate selector */}
+    <div className="text-left mb-4">
+      <p className="text-xs uppercase tracking-widest text-[--text-muted] mb-2 font-semibold">Entry Gate</p>
+      <div className="flex gap-3">
+        {['A', 'B'].map(ep => (
+          <button key={ep} type="button" onClick={() => setEntryPoint(ep)}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${
+              entryPoint === ep
+                ? 'bg-[--accent-blue] text-white border-[--accent-blue]'
+                : 'bg-[--bg-elevated] text-[--text-muted] border-[--border] hover:border-[--accent-blue]'
+            }`}>
+            Entry {ep}
+          </button>
+        ))}
+      </div>
+    </div>
+
     <div className="relative inline-block bg-white p-4 rounded-lg shadow-lg overflow-hidden mb-4">
-      <img 
-        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${booking.qr_payload}`} 
+      <img
+        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${booking.qr_payload}`}
         alt="Booking QR Code"
         className="z-10 w-[200px] h-[200px]"
       />
@@ -292,51 +360,46 @@ const QRCodeScreen = ({ booking, onDownload, onUseQr, onCopyPayload }) => (
     </div>
 
     <div className="text-left space-y-3 mb-4">
-      <div className="flex justify-between pb-3 border-b border-[--border]">
-        <span className="text-[--text-muted] text-sm">Slot ID</span>
-        <span className="font-medium font-display">{booking.slot_id}</span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-[--text-muted] text-sm">Driver</span>
-        <span className="font-medium">{booking.driver_name}</span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-[--text-muted] text-sm">Vehicle</span>
-        <span className="font-medium font-mono text-sm">{booking.vehicle_number}</span>
-      </div>
-      <div className="flex justify-between">
-        <span className="text-[--text-muted] text-sm">Arrival</span>
-        <span className="font-medium text-sm">{new Date(booking.arrival_time).toLocaleTimeString()}</span>
-      </div>
+      {[
+        { label: 'Slot ID', value: booking.slot_id },
+        { label: 'Driver',  value: booking.driver_name },
+        { label: 'Vehicle', value: booking.vehicle_number },
+        { label: 'Arrival', value: new Date(booking.arrival_time).toLocaleTimeString() },
+      ].map(({ label, value }, i, arr) => (
+        <div key={label} className={`flex justify-between ${i < arr.length - 1 ? 'pb-3 border-b border-[--border]' : ''}`}>
+          <span className="text-[--text-muted] text-sm">{label}</span>
+          <span className="font-medium text-sm">{value}</span>
+        </div>
+      ))}
     </div>
 
     <div className="text-sm text-left font-mono break-words bg-[--bg-elevated] p-3 rounded-md mb-4">{booking.qr_payload}</div>
 
     <div className="flex gap-3">
-      <button
-        onClick={() => onUseQr && onUseQr(booking.qr_payload)}
-        className="flex-1 bg-[--accent-green] text-black font-bold py-3 rounded-lg hover:brightness-105 transition-all flex items-center justify-center"
-      >
+      <button onClick={() => onUseQr && onUseQr(booking.qr_payload)}
+        className="flex-1 bg-[--accent-green] text-black font-bold py-3 rounded-lg hover:brightness-105 transition-all">
         Check-In Now
       </button>
-      <button
-        onClick={() => onCopyPayload && onCopyPayload(booking.qr_payload)}
-        className="flex-1 border border-[--border] rounded-lg py-3 text-[--text-muted] flex items-center justify-center"
-      >
+      <button onClick={() => onCopyPayload && onCopyPayload(booking.qr_payload)}
+        className="flex-1 border border-[--border] rounded-lg py-3 text-[--text-muted]">
         Copy Payload
       </button>
     </div>
 
-    <button 
-      onClick={() => onDownload && onDownload(booking.qr_payload)}
-      className="w-full mt-4 py-3 rounded-lg border-2 border-[--accent-blue] text-[--accent-blue] font-semibold hover:bg-[--accent-blue]/10 transition-colors"
-    >
+    <button onClick={() => onDownload && onDownload(booking.qr_payload)}
+      className="w-full mt-4 py-3 rounded-lg border-2 border-[--accent-blue] text-[--accent-blue] font-semibold hover:bg-[--accent-blue]/10 transition-colors">
       Download Token
     </button>
   </div>
 );
 
-const GateActions = ({ gateQrPayload, setGateQrPayload, handleCheckIn, handlePreviewBill, checkoutBill, handleCompletePayment }) => (
+const GateActions = ({
+  gateQrPayload, setGateQrPayload,
+  handleCheckIn, handlePreviewBill,
+  checkoutBill, handleCompletePayment,
+  entryPoint, setEntryPoint,
+  exitPoint, setExitPoint,
+}) => (
   <div className="bg-[--bg-surface] border border-[--border] rounded-xl p-6 space-y-6">
     <div>
       <h3 className="text-xl font-bold mb-1">Gate Operations</h3>
@@ -349,6 +412,41 @@ const GateActions = ({ gateQrPayload, setGateQrPayload, handleCheckIn, handlePre
         className="w-full bg-[--bg-elevated] border border-[--border] rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[--accent-blue] outline-none"
       />
     </div>
+
+    {/* Entry gate selector */}
+    <div>
+      <p className="text-xs uppercase tracking-widest text-[--text-muted] mb-2 font-semibold">Entry Gate</p>
+      <div className="flex gap-3">
+        {['A', 'B'].map(ep => (
+          <button key={ep} type="button" onClick={() => setEntryPoint(ep)}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${
+              entryPoint === ep
+                ? 'bg-[--accent-blue] text-white border-[--accent-blue]'
+                : 'bg-[--bg-elevated] text-[--text-muted] border-[--border] hover:border-[--accent-blue]'
+            }`}>
+            Entry {ep}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* Exit gate selector */}
+    <div>
+      <p className="text-xs uppercase tracking-widest text-[--text-muted] mb-2 font-semibold">Exit Gate</p>
+      <div className="flex gap-3">
+        {['A', 'B'].map(ep => (
+          <button key={ep} type="button" onClick={() => setExitPoint(ep)}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold border transition ${
+              exitPoint === ep
+                ? 'bg-[--accent-amber] text-black border-[--accent-amber]'
+                : 'bg-[--bg-elevated] text-[--text-muted] border-[--border] hover:border-[--accent-amber]'
+            }`}>
+            Exit {ep}
+          </button>
+        ))}
+      </div>
+    </div>
+
     <div className="flex gap-3">
       <button onClick={handleCheckIn} className="btn-primary flex-1 text-sm py-3 flex items-center justify-center font-semibold">Check-In</button>
       <button onClick={handlePreviewBill} className="flex-1 bg-[--accent-amber] text-black font-semibold rounded-lg py-3 hover:brightness-110 transition-all text-sm flex items-center justify-center">Check-Out</button>
@@ -369,5 +467,133 @@ const GateActions = ({ gateQrPayload, setGateQrPayload, handleCheckIn, handlePre
     )}
   </div>
 );
+
+/* ── NavigationPanel ──────────────────────────────────────────────────── */
+const NavigationPanel = ({ title, subtitle, steps, accent, miniMap }) => {
+  const accentVar = accent === 'amber' ? 'var(--accent-amber)' : 'var(--accent-blue)';
+  return (
+    <div className="mt-8 bg-[--bg-surface] border border-[--border] rounded-xl p-6"
+      style={{ borderLeftColor: accentVar, borderLeftWidth: 4 }}>
+      <div className="flex flex-col md:flex-row gap-6">
+        <div className="flex-1">
+          <h3 className="text-xl font-bold mb-1" style={{ color: accentVar }}>{title}</h3>
+          <p className="text-sm text-[--text-muted] mb-4">{subtitle}</p>
+          <ol className="space-y-3">
+            {steps.map((step, i) => (
+              <li key={i} className="flex items-start gap-3">
+                <span className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{ background: `${accentVar}22`, color: accentVar }}>
+                  {i + 1}
+                </span>
+                <span className="text-sm text-[--text-primary] leading-relaxed pt-0.5">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        {miniMap && <div className="flex-shrink-0">{miniMap}</div>}
+      </div>
+    </div>
+  );
+};
+
+/* ── ParkingMiniMap ───────────────────────────────────────────────────── */
+// Grid constants mirror the backend (GRID_COLS=10, GRID_ROWS=11)
+const GRID_COLS = 10;
+const GRID_ROWS = 11;
+const CELL = 24; // px per grid cell
+const PAD  = 24; // px padding (room for gate label text above/below)
+
+// Gates are corner cells *inside* the grid:
+//   Entry A → (col 0, row 0)            Entry B → (col 9, row 0)
+//   Exit  A → (col 0, row 10)           Exit  B → (col 9, row 10)
+
+const ParkingMiniMap = ({ directions, mode, gateKey }) => {
+  const svgW = GRID_COLS * CELL + PAD * 2;
+  const svgH = GRID_ROWS * CELL + PAD * 2; // no extra rows — gates are inside the grid
+
+  // Grid (col, row) → SVG pixel centre (no row offset needed)
+  const cx = (col) => PAD + col * CELL + CELL / 2;
+  const cy = (row) => PAD + row * CELL + CELL / 2;
+
+  const gateCol = gateKey === 'B' ? GRID_COLS - 1 : 0;
+  const { pos_x, pos_y } = directions;
+  const accentColor = mode === 'entry' ? 'var(--accent-blue)' : 'var(--accent-amber)';
+
+  // Build path: gate corner → aisle → row → slot  (entry)
+  //             slot → row → aisle → gate corner   (exit)
+  let points = [];
+  if (mode === 'entry') {
+    const gateRow = 0; // entry gates sit at row 0
+    points = [
+      [cx(gateCol), cy(gateRow)],   // start: gate corner
+      [cx(gateCol), cy(pos_y)],     // descend aisle to slot's row
+      [cx(pos_x),   cy(pos_y)],     // traverse row to slot
+    ];
+  } else {
+    const gateRow = GRID_ROWS - 1; // exit gates sit at last row
+    points = [
+      [cx(pos_x),   cy(pos_y)],     // start: slot
+      [cx(gateCol), cy(pos_y)],     // traverse row to aisle
+      [cx(gateCol), cy(gateRow)],   // descend aisle to exit corner
+    ];
+  }
+
+  const polylineStr = points.map(([x, y]) => `${x},${y}`).join(' ');
+  const gateRow    = mode === 'entry' ? 0 : GRID_ROWS - 1;
+  const gateLabel  = mode === 'entry' ? `Entry ${gateKey}` : `Exit ${gateKey}`;
+  // Label sits above the SVG for entry, below for exit
+  const labelY     = mode === 'entry' ? PAD - 8 : svgH - 4;
+
+  return (
+    <svg width={svgW} height={svgH} style={{ background: 'var(--bg-elevated)', borderRadius: 12, display: 'block' }}>
+      {/* Grid cells */}
+      {Array.from({ length: GRID_ROWS }).map((_, r) =>
+        Array.from({ length: GRID_COLS }).map((_, c) => (
+          <rect key={`${r}-${c}`}
+            x={PAD + c * CELL + 1} y={PAD + r * CELL + 1}
+            width={CELL - 2} height={CELL - 2}
+            rx={2} fill="var(--bg-surface)" opacity={0.7} />
+        ))
+      )}
+
+      {/* Target slot highlight */}
+      {pos_x !== null && pos_y !== null && (
+        <rect x={PAD + pos_x * CELL + 1} y={PAD + pos_y * CELL + 1}
+          width={CELL - 2} height={CELL - 2} rx={2}
+          fill={accentColor} opacity={0.3} />
+      )}
+
+      {/* Gate corner cell overlay */}
+      <rect x={PAD + gateCol * CELL + 1} y={PAD + gateRow * CELL + 1}
+        width={CELL - 2} height={CELL - 2} rx={2}
+        fill={accentColor} opacity={0.65}
+        stroke={accentColor} strokeWidth={1.5} />
+      <text x={cx(gateCol)} y={cy(gateRow)}
+        textAnchor="middle" dominantBaseline="middle"
+        fontSize={7} fontWeight="bold" fill="white" fontFamily="monospace">
+        {gateKey}
+      </text>
+
+      {/* Navigation path */}
+      <polyline points={polylineStr}
+        fill="none" stroke={accentColor} strokeWidth={2.5}
+        strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3" />
+
+      {/* Start dot */}
+      <circle cx={points[0][0]} cy={points[0][1]} r={5} fill={accentColor} />
+      {/* End dot */}
+      {points.length > 1 && (
+        <circle cx={points[points.length - 1][0]} cy={points[points.length - 1][1]}
+          r={5} fill={accentColor} opacity={0.55} />
+      )}
+
+      {/* Gate label (above/below SVG area within padding) */}
+      <text x={cx(gateCol)} y={labelY}
+        textAnchor="middle" fontSize={9} fill="var(--text-muted)" fontFamily="monospace">
+        {gateLabel}
+      </text>
+    </svg>
+  );
+};
 
 export default DriverPage;

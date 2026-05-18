@@ -44,3 +44,20 @@ SLOTS_LAYOUT = {
     SlotCategory.EV: 15,
     SlotCategory.DISABLED: 5,
 }
+
+# Spatial grid dimensions (columns × rows)
+# Row layout: 2W rows 0-2, 4W rows 3-7, EV rows 8-9, Disabled row 10
+GRID_COLS = 10
+GRID_ROWS = 11  # rows 0-10
+
+# Static entry points — top-left and top-right corners of the grid (row 0)
+ENTRY_POINTS = {
+    "A": {"name": "Entry A", "x": 0,             "y": 0,             "side": "left"},
+    "B": {"name": "Entry B", "x": GRID_COLS - 1, "y": 0,             "side": "right"},
+}
+
+# Static exit points — bottom-left and bottom-right corners of the grid (row GRID_ROWS-1)
+EXIT_POINTS = {
+    "A": {"name": "Exit A", "x": 0,              "y": GRID_ROWS - 1, "side": "left"},
+    "B": {"name": "Exit B", "x": GRID_COLS - 1,  "y": GRID_ROWS - 1, "side": "right"},
+}

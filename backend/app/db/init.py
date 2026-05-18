@@ -75,6 +75,14 @@ def init_db():
         )
     """)
     
+    # Add spatial coordinate columns to slots if they don't exist yet
+    # (safe migration: ALTER TABLE is a no-op if the column is already present)
+    existing_cols = {row[1] for row in cursor.execute("PRAGMA table_info(slots)").fetchall()}
+    if "pos_x" not in existing_cols:
+        cursor.execute("ALTER TABLE slots ADD COLUMN pos_x INTEGER")
+    if "pos_y" not in existing_cols:
+        cursor.execute("ALTER TABLE slots ADD COLUMN pos_y INTEGER")
+
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")
