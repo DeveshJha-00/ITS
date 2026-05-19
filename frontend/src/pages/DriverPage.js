@@ -498,10 +498,10 @@ const NavigationPanel = ({ title, subtitle, steps, accent, miniMap }) => {
 
 /* ── ParkingMiniMap ───────────────────────────────────────────────────── */
 // Grid constants mirror the backend (GRID_COLS=10, GRID_ROWS=11)
-const GRID_COLS = 10;
-const GRID_ROWS = 11;
-const CELL = 24; // px per grid cell
-const PAD  = 24; // px padding (room for gate label text above/below)
+// const GRID_COLS = 10;
+// const GRID_ROWS = 11;
+// const CELL = 24; // px per grid cell
+// const PAD  = 24; // px padding (room for gate label text above/below)
 
 // Gates are corner cells *inside* the grid:
 //   Entry A → (col 0, row 0)            Entry B → (col 9, row 0)
