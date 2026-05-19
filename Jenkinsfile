@@ -95,6 +95,12 @@ pipeline {
             }
         }
 
+        stage('Deploy Backend to Render') {
+            steps {
+                bat 'curl -X POST https://api.render.com/deploy/srv-d85u5omgvqtc73e6fqag?key=ZfsuFYhu-z8'
+            }
+        }
+
         stage('Deploy Frontend to Vercel') {
             steps {
                 dir('frontend') {
