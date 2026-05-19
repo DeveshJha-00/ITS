@@ -507,93 +507,93 @@ const PAD  = 24; // px padding (room for gate label text above/below)
 //   Entry A → (col 0, row 0)            Entry B → (col 9, row 0)
 //   Exit  A → (col 0, row 10)           Exit  B → (col 9, row 10)
 
-const ParkingMiniMap = ({ directions, mode, gateKey }) => {
-  const svgW = GRID_COLS * CELL + PAD * 2;
-  const svgH = GRID_ROWS * CELL + PAD * 2; // no extra rows — gates are inside the grid
+// const ParkingMiniMap = ({ directions, mode, gateKey }) => {
+//   const svgW = GRID_COLS * CELL + PAD * 2;
+//   const svgH = GRID_ROWS * CELL + PAD * 2; // no extra rows — gates are inside the grid
 
-  // Grid (col, row) → SVG pixel centre (no row offset needed)
-  const cx = (col) => PAD + col * CELL + CELL / 2;
-  const cy = (row) => PAD + row * CELL + CELL / 2;
+//   // Grid (col, row) → SVG pixel centre (no row offset needed)
+//   const cx = (col) => PAD + col * CELL + CELL / 2;
+//   const cy = (row) => PAD + row * CELL + CELL / 2;
 
-  const gateCol = gateKey === 'B' ? GRID_COLS - 1 : 0;
-  const { pos_x, pos_y } = directions;
-  const accentColor = mode === 'entry' ? 'var(--accent-blue)' : 'var(--accent-amber)';
+//   const gateCol = gateKey === 'B' ? GRID_COLS - 1 : 0;
+//   const { pos_x, pos_y } = directions;
+//   const accentColor = mode === 'entry' ? 'var(--accent-blue)' : 'var(--accent-amber)';
 
-  // Build path: gate corner → aisle → row → slot  (entry)
-  //             slot → row → aisle → gate corner   (exit)
-  let points = [];
-  if (mode === 'entry') {
-    const gateRow = 0; // entry gates sit at row 0
-    points = [
-      [cx(gateCol), cy(gateRow)],   // start: gate corner
-      [cx(gateCol), cy(pos_y)],     // descend aisle to slot's row
-      [cx(pos_x),   cy(pos_y)],     // traverse row to slot
-    ];
-  } else {
-    const gateRow = GRID_ROWS - 1; // exit gates sit at last row
-    points = [
-      [cx(pos_x),   cy(pos_y)],     // start: slot
-      [cx(gateCol), cy(pos_y)],     // traverse row to aisle
-      [cx(gateCol), cy(gateRow)],   // descend aisle to exit corner
-    ];
-  }
+//   // Build path: gate corner → aisle → row → slot  (entry)
+//   //             slot → row → aisle → gate corner   (exit)
+//   let points = [];
+//   if (mode === 'entry') {
+//     const gateRow = 0; // entry gates sit at row 0
+//     points = [
+//       [cx(gateCol), cy(gateRow)],   // start: gate corner
+//       [cx(gateCol), cy(pos_y)],     // descend aisle to slot's row
+//       [cx(pos_x),   cy(pos_y)],     // traverse row to slot
+//     ];
+//   } else {
+//     const gateRow = GRID_ROWS - 1; // exit gates sit at last row
+//     points = [
+//       [cx(pos_x),   cy(pos_y)],     // start: slot
+//       [cx(gateCol), cy(pos_y)],     // traverse row to aisle
+//       [cx(gateCol), cy(gateRow)],   // descend aisle to exit corner
+//     ];
+//   }
 
-  const polylineStr = points.map(([x, y]) => `${x},${y}`).join(' ');
-  const gateRow    = mode === 'entry' ? 0 : GRID_ROWS - 1;
-  const gateLabel  = mode === 'entry' ? `Entry ${gateKey}` : `Exit ${gateKey}`;
-  // Label sits above the SVG for entry, below for exit
-  const labelY     = mode === 'entry' ? PAD - 8 : svgH - 4;
+//   const polylineStr = points.map(([x, y]) => `${x},${y}`).join(' ');
+//   const gateRow    = mode === 'entry' ? 0 : GRID_ROWS - 1;
+//   const gateLabel  = mode === 'entry' ? `Entry ${gateKey}` : `Exit ${gateKey}`;
+//   // Label sits above the SVG for entry, below for exit
+//   const labelY     = mode === 'entry' ? PAD - 8 : svgH - 4;
 
-  return (
-    <svg width={svgW} height={svgH} style={{ background: 'var(--bg-elevated)', borderRadius: 12, display: 'block' }}>
-      {/* Grid cells */}
-      {Array.from({ length: GRID_ROWS }).map((_, r) =>
-        Array.from({ length: GRID_COLS }).map((_, c) => (
-          <rect key={`${r}-${c}`}
-            x={PAD + c * CELL + 1} y={PAD + r * CELL + 1}
-            width={CELL - 2} height={CELL - 2}
-            rx={2} fill="var(--bg-surface)" opacity={0.7} />
-        ))
-      )}
+//   return (
+//     <svg width={svgW} height={svgH} style={{ background: 'var(--bg-elevated)', borderRadius: 12, display: 'block' }}>
+//       {/* Grid cells */}
+//       {Array.from({ length: GRID_ROWS }).map((_, r) =>
+//         Array.from({ length: GRID_COLS }).map((_, c) => (
+//           <rect key={`${r}-${c}`}
+//             x={PAD + c * CELL + 1} y={PAD + r * CELL + 1}
+//             width={CELL - 2} height={CELL - 2}
+//             rx={2} fill="var(--bg-surface)" opacity={0.7} />
+//         ))
+//       )}
 
-      {/* Target slot highlight */}
-      {pos_x !== null && pos_y !== null && (
-        <rect x={PAD + pos_x * CELL + 1} y={PAD + pos_y * CELL + 1}
-          width={CELL - 2} height={CELL - 2} rx={2}
-          fill={accentColor} opacity={0.3} />
-      )}
+//       {/* Target slot highlight */}
+//       {pos_x !== null && pos_y !== null && (
+//         <rect x={PAD + pos_x * CELL + 1} y={PAD + pos_y * CELL + 1}
+//           width={CELL - 2} height={CELL - 2} rx={2}
+//           fill={accentColor} opacity={0.3} />
+//       )}
 
-      {/* Gate corner cell overlay */}
-      <rect x={PAD + gateCol * CELL + 1} y={PAD + gateRow * CELL + 1}
-        width={CELL - 2} height={CELL - 2} rx={2}
-        fill={accentColor} opacity={0.65}
-        stroke={accentColor} strokeWidth={1.5} />
-      <text x={cx(gateCol)} y={cy(gateRow)}
-        textAnchor="middle" dominantBaseline="middle"
-        fontSize={7} fontWeight="bold" fill="white" fontFamily="monospace">
-        {gateKey}
-      </text>
+//       {/* Gate corner cell overlay */}
+//       <rect x={PAD + gateCol * CELL + 1} y={PAD + gateRow * CELL + 1}
+//         width={CELL - 2} height={CELL - 2} rx={2}
+//         fill={accentColor} opacity={0.65}
+//         stroke={accentColor} strokeWidth={1.5} />
+//       <text x={cx(gateCol)} y={cy(gateRow)}
+//         textAnchor="middle" dominantBaseline="middle"
+//         fontSize={7} fontWeight="bold" fill="white" fontFamily="monospace">
+//         {gateKey}
+//       </text>
 
-      {/* Navigation path */}
-      <polyline points={polylineStr}
-        fill="none" stroke={accentColor} strokeWidth={2.5}
-        strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3" />
+//       {/* Navigation path */}
+//       <polyline points={polylineStr}
+//         fill="none" stroke={accentColor} strokeWidth={2.5}
+//         strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3" />
 
-      {/* Start dot */}
-      <circle cx={points[0][0]} cy={points[0][1]} r={5} fill={accentColor} />
-      {/* End dot */}
-      {points.length > 1 && (
-        <circle cx={points[points.length - 1][0]} cy={points[points.length - 1][1]}
-          r={5} fill={accentColor} opacity={0.55} />
-      )}
+//       {/* Start dot */}
+//       <circle cx={points[0][0]} cy={points[0][1]} r={5} fill={accentColor} />
+//       {/* End dot */}
+//       {points.length > 1 && (
+//         <circle cx={points[points.length - 1][0]} cy={points[points.length - 1][1]}
+//           r={5} fill={accentColor} opacity={0.55} />
+//       )}
 
-      {/* Gate label (above/below SVG area within padding) */}
-      <text x={cx(gateCol)} y={labelY}
-        textAnchor="middle" fontSize={9} fill="var(--text-muted)" fontFamily="monospace">
-        {gateLabel}
-      </text>
-    </svg>
-  );
-};
+//       {/* Gate label (above/below SVG area within padding) */}
+//       <text x={cx(gateCol)} y={labelY}
+//         textAnchor="middle" fontSize={9} fill="var(--text-muted)" fontFamily="monospace">
+//         {gateLabel}
+//       </text>
+//     </svg>
+//   );
+// };
 
 export default DriverPage;
