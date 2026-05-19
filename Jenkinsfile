@@ -89,7 +89,7 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 retry(3) {
-                    bat 'timeout /t 5'
+                    sleep 5
                     bat 'docker push %IMAGE_NAME%'
                 }
             }
