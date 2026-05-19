@@ -41,32 +41,32 @@ pipeline {
             }
         }
 
-//         stage('SonarCloud Analysis') {
-//     steps {
-//         script {
+        stage('SonarCloud Analysis') {
+    steps {
+        script {
 
-//             def scannerHome = tool 'sonar-scanner'
+            def scannerHome = tool 'sonar-scanner'
 
-//             withSonarQubeEnv('sonarcloud') {
+            withSonarQubeEnv('sonarcloud') {
 
-//                 bat """
-//                 ${scannerHome}\\bin\\sonar-scanner.bat ^
-//                 -Dsonar.projectKey=DeveshJha-00_ITS ^
-//                 -Dsonar.organization=deveshjha-00 ^
-//                 -Dsonar.sources=. ^
-//                 -Dsonar.host.url=https://sonarcloud.io ^
-//                 -Dsonar.token=%SONAR_AUTH_TOKEN%
-//                 """
-//             }
-//         }
-//     }
-// }
+                bat """
+                ${scannerHome}\\bin\\sonar-scanner.bat ^
+                -Dsonar.projectKey=DeveshJha-00_ITS ^
+                -Dsonar.organization=deveshjha-00 ^
+                -Dsonar.sources=. ^
+                -Dsonar.host.url=https://sonarcloud.io ^
+                -Dsonar.token=%SONAR_AUTH_TOKEN%
+                """
+            }
+        }
+    }
+}
 
-        // stage('Trivy Scan') {
-        //     steps {
-        //         bat 'trivy fs . > trivy-report.txt'
-        //     }
-        // }
+        stage('Trivy Scan') {
+            steps {
+                bat 'trivy fs . > trivy-report.txt'
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
