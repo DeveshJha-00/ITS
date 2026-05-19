@@ -17,10 +17,10 @@ htmlcov/
 
 # Flask / app runtime
 instance/
-*.db
+# *.db
 *.sqlite
 *.sqlite3
-parksmart.db
+# parksmart.db
 
 # Node / frontend
 node_modules/
